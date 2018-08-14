@@ -15,6 +15,9 @@ SRC_FILES += \
   $(SDK_ROOT)/components/ble/ble_services/ble_bas/ble_bas.c \
   $(SDK_ROOT)/components/ble/ble_services/ble_dis/ble_dis.c \
   $(SDK_ROOT)/components/ble/ble_services/ble_hrs/ble_hrs.c \
+  $(SDK_ROOT)/components/ble/ble_services/ble_hrs_c/ble_hrs_c.c \
+  $(SDK_ROOT)/components/ble/ble_services/ble_rscs/ble_rscs.c \
+  $(SDK_ROOT)/components/ble/ble_services/ble_rscs_c/ble_rscs_c.c \
   $(SDK_ROOT)/components/ble/common/ble_advdata.c \
   $(SDK_ROOT)/components/ble/common/ble_conn_params.c \
   $(SDK_ROOT)/components/ble/common/ble_conn_state.c \
@@ -36,18 +39,23 @@ SRC_FILES += \
   $(SDK_ROOT)/components/drivers_nrf/clock/nrf_drv_clock.c \
   $(SDK_ROOT)/components/drivers_nrf/common/nrf_drv_common.c \
   $(SDK_ROOT)/components/drivers_nrf/gpiote/nrf_drv_gpiote.c \
+  $(SDK_ROOT)/components/drivers_nrf/rng/nrf_drv_rng.c \
   $(SDK_ROOT)/components/drivers_nrf/uart/nrf_drv_uart.c \
   $(SDK_ROOT)/components/libraries/bsp/bsp.c \
   $(SDK_ROOT)/components/libraries/bsp/bsp_btn_ble.c \
   $(SDK_ROOT)/components/libraries/bsp/bsp_nfc.c \
   $(SDK_ROOT)/components/libraries/button/app_button.c \
   $(SDK_ROOT)/components/libraries/crc16/crc16.c \
+  $(SDK_ROOT)/components/libraries/crypto/nrf_crypto.c \
+  $(SDK_ROOT)/components/libraries/ecc/ecc.c \
   $(SDK_ROOT)/components/libraries/fds/fds.c \
   $(SDK_ROOT)/components/libraries/fstorage/fstorage.c \
   $(SDK_ROOT)/components/libraries/hardfault/hardfault_implementation.c \
   $(SDK_ROOT)/components/libraries/log/src/nrf_log_backend_serial.c \
   $(SDK_ROOT)/components/libraries/log/src/nrf_log_frontend.c \
+  $(SDK_ROOT)/components/libraries/queue/nrf_queue.c \
   $(SDK_ROOT)/components/libraries/sensorsim/sensorsim.c \
+  $(SDK_ROOT)/components/libraries/sha256/sha256.c \
   $(SDK_ROOT)/components/libraries/timer/app_timer.c \
   $(SDK_ROOT)/components/libraries/util/app_error.c \
   $(SDK_ROOT)/components/libraries/util/app_error_weak.c \
@@ -66,6 +74,7 @@ SRC_FILES += \
 INC_FOLDERS += \
   $(SDK_ROOT)/components \
   $(SDK_ROOT)/components/ble/ble_advertising \
+  $(SDK_ROOT)/components/ble/ble_db_discovery \
   $(SDK_ROOT)/components/ble/ble_dtm \
   $(SDK_ROOT)/components/ble/ble_racp \
   $(SDK_ROOT)/components/ble/ble_services/ble_ancs_c \
@@ -127,8 +136,10 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/button \
   $(SDK_ROOT)/components/libraries/crc16 \
   $(SDK_ROOT)/components/libraries/crc32 \
+  $(SDK_ROOT)/components/libraries/crypto \
   $(SDK_ROOT)/components/libraries/csense \
   $(SDK_ROOT)/components/libraries/csense_drv \
+  $(SDK_ROOT)/components/libraries/ecc \
   $(SDK_ROOT)/components/libraries/experimental_section_vars \
   $(SDK_ROOT)/components/libraries/fds \
   $(SDK_ROOT)/components/libraries/fstorage \
@@ -144,7 +155,9 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/libraries/queue \
   $(SDK_ROOT)/components/libraries/scheduler \
   $(SDK_ROOT)/components/libraries/sensorsim \
+  $(SDK_ROOT)/components/libraries/sha256 \
   $(SDK_ROOT)/components/libraries/slip \
+  $(SDK_ROOT)/components/libraries/svc \
   $(SDK_ROOT)/components/libraries/timer \
   $(SDK_ROOT)/components/libraries/twi \
   $(SDK_ROOT)/components/libraries/uart \
@@ -165,11 +178,13 @@ INC_FOLDERS += \
   $(SDK_ROOT)/components/toolchain \
   $(SDK_ROOT)/components/toolchain/cmsis/include \
   $(SDK_ROOT)/components/toolchain/gcc \
+  $(SDK_ROOT)/external/micro-ecc/micro-ecc \
   $(SDK_ROOT)/external/segger_rtt \
   ../config \
 
 # Libraries common to all targets
 LIB_FILES += \
+  $(SDK_ROOT)/external/micro-ecc/nrf52_armgcc/armgcc/micro_ecc_lib_nrf52.a \
 
 # C flags common to all targets
 CFLAGS += -DNRF52840_XXAA
@@ -178,6 +193,7 @@ CFLAGS += -DSOFTDEVICE_PRESENT
 CFLAGS += -DBLE_STACK_SUPPORT_REQD
 CFLAGS += -DCONFIG_GPIO_AS_PINRESET
 CFLAGS += -D__HEAP_SIZE=0
+CFLAGS += -DSVC_INTERFACE_CALL_AS_NORMAL_FUNCTION
 CFLAGS += -DS132
 CFLAGS += -DBOARD_PCA10056
 CFLAGS += -DNRF_SD_BLE_API_VERSION=3
@@ -200,6 +216,7 @@ ASMFLAGS += -DSOFTDEVICE_PRESENT
 ASMFLAGS += -DBLE_STACK_SUPPORT_REQD
 ASMFLAGS += -DCONFIG_GPIO_AS_PINRESET
 ASMFLAGS += -D__HEAP_SIZE=0
+ASMFLAGS += -DSVC_INTERFACE_CALL_AS_NORMAL_FUNCTION
 ASMFLAGS += -DS132
 ASMFLAGS += -DBOARD_PCA10056
 ASMFLAGS += -DNRF_SD_BLE_API_VERSION=3

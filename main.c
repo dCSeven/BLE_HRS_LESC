@@ -47,39 +47,47 @@
  */
 
 #include <stdint.h>
+
 #include <string.h>
 #include "nordic_common.h"
-#include "nrf.h"
-#include "app_error.h"
+#include "softdevice_handler.h"
+#include "peer_manager.h"
+#include "app_timer.h"
+#include "boards.h"
+#include "bsp.h"
+#include "bsp_btn_ble.h"
 #include "ble.h"
-#include "ble_hci.h"
-#include "ble_srv_common.h"
 #include "ble_advdata.h"
 #include "ble_advertising.h"
-#include "ble_bas.h"
-#include "ble_hrs.h"
-#include "ble_dis.h"
 #include "ble_conn_params.h"
-#include "boards.h"
-#include "sensorsim.h"
-#include "softdevice_handler.h"
-#include "app_timer.h"
-#include "bsp.h"
-#include "nrf_delay.h"
-#include "bsp_btn_ble.h"
-#include "peer_manager.h"
-#include "fds.h"
-#include "fstorage.h"
-#include "nrf_ble_gatt.h"
-#include "ble_conn_state.h"
 
+#include "ble_hrs.h"
+
+#include "ble_conn_state.h"
+#include "fstorage.h"
+#include "fds.h"
+#include "nrf_crypto.h" //EC DH
 #define NRF_LOG_MODULE_NAME "APP"
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 
+#include "ble_srv_common.h"
+#include "ble_bas.h"
+#include "ble_hci.h"
+#include "ble_dis.h"
+
+#include "nrf.h"
+#include "nrf_delay.h"
+#include "nrf_ble_gatt.h"
+
+#include "app_error.h"
+#include "sensorsim.h"
+
+#include "nrf_drv_rng.h"
+
 #define IS_SRVC_CHANGED_CHARACT_PRESENT  1                                           /**< Include or not the service_changed characteristic. if not enabled, the server's database cannot be changed for the lifetime of the device*/
 
-#define DEVICE_NAME                      "Nordic_HRM"                                /**< Name of device. Will be included in the advertising data. */
+#define DEVICE_NAME                      "Nordic_HRM_LESC"                                /**< Name of device. Will be included in the advertising data. */
 #define MANUFACTURER_NAME                "NordicSemiconductor"                       /**< Manufacturer. Will be passed to Device Information Service. */
 #define APP_ADV_INTERVAL                 300                                         /**< The advertising interval (in units of 0.625 ms. This value corresponds to 187.5 ms). */
 #define APP_ADV_TIMEOUT_IN_SECONDS       180                                         /**< The advertising timeout in units of seconds. */
@@ -113,18 +121,51 @@
 #define NEXT_CONN_PARAMS_UPDATE_DELAY    APP_TIMER_TICKS(30000, APP_TIMER_PRESCALER) /**< Time between each call to sd_ble_gap_conn_param_update after the first call (30 seconds). */
 #define MAX_CONN_PARAMS_UPDATE_COUNT     3                                           /**< Number of attempts before giving up the connection parameter negotiation. */
 
-#define SEC_PARAM_BOND                   1                                           /**< Perform bonding. */
-#define SEC_PARAM_MITM                   0                                           /**< Man In The Middle protection not required. */
-#define SEC_PARAM_LESC                   0                                           /**< LE Secure Connections not enabled. */
-#define SEC_PARAM_KEYPRESS               0                                           /**< Keypress notifications not enabled. */
-#define SEC_PARAM_IO_CAPABILITIES        BLE_GAP_IO_CAPS_NONE                        /**< No I/O capabilities. */
-#define SEC_PARAM_OOB                    0                                           /**< Out Of Band data not available. */
-#define SEC_PARAM_MIN_KEY_SIZE           7                                           /**< Minimum encryption key size. */
-#define SEC_PARAM_MAX_KEY_SIZE           16                                          /**< Maximum encryption key size. */
-
 #define DEAD_BEEF                        0xDEADBEEF                                  /**< Value used as error code on stack dump, can be used to identify stack location on stack unwind. */
 
 #define APP_FEATURE_NOT_SUPPORTED        BLE_GATT_STATUS_ATTERR_APP_BEGIN + 2        /**< Reply when unsupported features are requested. */
+
+#define BLE_GAP_LESC_P256_SK_LEN 32
+/**@brief GAP LE Secure Connections P-256 Private Key. */
+typedef struct
+{
+  uint8_t   sk[BLE_GAP_LESC_P256_SK_LEN];        /**< LE Secure Connections Elliptic Curve Diffie-Hellman P-256 Private Key in little-endian. */
+} ble_gap_lesc_p256_sk_t;
+
+
+
+// LESC Keys
+#if LESC_DEBUG_MODE
+/**@brief Bluetooth SIG debug mode Private Key */
+__ALIGN(4) static const ble_gap_lesc_p256_sk_t m_debug_lesc_sk = {{0xbd,0x1a,0x3c,0xcd,0xa6,0xb8,0x99,0x58,0x99,0xb7,0x40,0xeb,0x7b,0x60,0xff,0x4a, \
+                                                 0x50,0x3f,0x10,0xd2,0xe3,0xb3,0xc9,0x74,0x38,0x5f,0xc5,0xa3,0xd4,0xf6,0x49,0x3f}};
+#else
+/**@brief Private Key: Replace with your own one, can be a random number or generated using a tool like OpenSSL */
+__ALIGN(4) static const ble_gap_lesc_p256_sk_t m_lesc_sk = {{0x4a,0xa3,0x74,0x4b,0xa9,0xfc,0x2a,0x3a,0x8e,0x5a,0xd5,0x15,0xf8,0xe3,0x3f,0xb0, \
+                                                 0x82,0x6c,0x98,0xf0,0x32,0x2a,0x51,0xee,0xb5,0x35,0x57,0x12,0xac,0x73,0x25,0x04}};
+#endif
+__ALIGN(4) static ble_gap_lesc_p256_pk_t m_lesc_pk;    /**< LESC ECC Public Key */
+__ALIGN(4) static ble_gap_lesc_dhkey_t m_lesc_dhkey;   /**< LESC ECC DH Key*/
+
+static nrf_crypto_key_t m_crypto_key_sk =
+{
+#if LESC_DEBUG_MODE
+    .p_le_data = (uint8_t *) m_debug_lesc_sk.sk,
+#else
+    .p_le_data = (uint8_t *) m_lesc_sk.sk,
+#endif
+    .len = sizeof(m_lesc_sk.sk)
+};
+static nrf_crypto_key_t m_crypto_key_pk =
+{
+    .p_le_data = (uint8_t *) m_lesc_pk.pk,
+    .len = sizeof(m_lesc_pk.pk)
+};
+static nrf_crypto_key_t m_crypto_key_dhkey =
+{
+    .p_le_data = (uint8_t *) m_lesc_dhkey.key,
+    .len = sizeof(m_lesc_dhkey.key)
+};
 
 
 static uint16_t  m_conn_handle = BLE_CONN_HANDLE_INVALID; /**< Handle of the current connection. */
@@ -228,7 +269,7 @@ static void pm_evt_handler(pm_evt_t const * p_evt)
         case PM_EVT_CONN_SEC_CONFIG_REQ:
         {
             // Reject pairing request from an already bonded peer.
-            pm_conn_sec_config_t conn_sec_config = {.allow_repairing = false};
+            pm_conn_sec_config_t conn_sec_config = {.allow_repairing = true};
             pm_conn_sec_config_reply(p_evt->conn_handle, &conn_sec_config);
         } break;
 
@@ -708,6 +749,7 @@ static void on_adv_evt(ble_adv_evt_t ble_adv_evt)
 static void on_ble_evt(ble_evt_t * p_ble_evt)
 {
     uint32_t err_code;
+	static nrf_crypto_key_t peer_pk;
 
     switch (p_ble_evt->header.evt_id)
     {
@@ -716,7 +758,20 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
             err_code = bsp_indication_set(BSP_INDICATE_CONNECTED);
             APP_ERROR_CHECK(err_code);
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
-            break; // BLE_GAP_EVT_CONNECTED
+
+            static ret_code_t ret_val = NRF_SUCCESS;
+            ret_val = pm_conn_secure (m_conn_handle, 0);
+
+            switch (ret_val)
+            {
+            case NRF_SUCCESS:
+                break;
+            default: // error case (don't split for now)
+                //TODO set LED2
+                sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_AUTHENTICATION_FAILURE );
+            }
+
+          break; // BLE_GAP_EVT_CONNECTED
 
         case BLE_GAP_EVT_DISCONNECTED:
             NRF_LOG_INFO("Disconnected, reason %d\r\n",
@@ -741,9 +796,27 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
             break; // BLE_GATTS_EVT_TIMEOUT
 
         case BLE_EVT_USER_MEM_REQUEST:
-            err_code = sd_ble_user_mem_reply(m_conn_handle, NULL);
-            APP_ERROR_CHECK(err_code);
+            if(ble_conn_state_encrypted(m_conn_handle))
+            {
+                err_code = sd_ble_user_mem_reply(m_conn_handle, NULL);
+                APP_ERROR_CHECK(err_code);
+            }else
+            {
+                //sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_AUTHENTICATION_FAILURE );
+                // TODO break connection or retry encryption and set LED 4
+            }
             break; // BLE_EVT_USER_MEM_REQUEST
+
+        case BLE_GAP_EVT_LESC_DHKEY_REQUEST:
+            NRF_LOG_INFO("BLE_GAP_EVT_LESC_DHKEY_REQUEST\r\n");
+            peer_pk.p_le_data = &p_ble_evt->evt.gap_evt.params.lesc_dhkey_request.p_pk_peer->pk[0];
+            peer_pk.len = BLE_GAP_LESC_P256_PK_LEN;
+            err_code = nrf_crypto_shared_secret_compute(NRF_CRYPTO_CURVE_SECP256R1, &m_crypto_key_sk, &peer_pk, &m_crypto_key_dhkey);
+            APP_ERROR_CHECK(err_code);
+
+            err_code = sd_ble_gap_lesc_dhkey_reply(m_conn_handle, &m_lesc_dhkey);
+            APP_ERROR_CHECK(err_code);
+            break;
 
         case BLE_GATTS_EVT_RW_AUTHORIZE_REQUEST:
         {
@@ -774,13 +847,12 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
             }
         } break; // BLE_GATTS_EVT_RW_AUTHORIZE_REQUEST
 
-
+        case 1:case 4: break; // unknown event that happens each connection at the beginning
         default:
             // No implementation needed.
             break;
     }
 }
-
 
 /**@brief Function for dispatching a BLE stack event to all modules with a BLE stack event handler.
  *
@@ -910,7 +982,7 @@ void bsp_event_handler(bsp_event_t event)
 static void peer_manager_init(bool erase_bonds)
 {
     ble_gap_sec_params_t sec_param;
-    ret_code_t           err_code;
+    volatile ret_code_t           err_code;
 
     err_code = pm_init();
     APP_ERROR_CHECK(err_code);
@@ -924,16 +996,17 @@ static void peer_manager_init(bool erase_bonds)
     memset(&sec_param, 0, sizeof(ble_gap_sec_params_t));
 
     // Security parameters to be used for all security procedures.
-    sec_param.bond           = SEC_PARAM_BOND;
-    sec_param.mitm           = SEC_PARAM_MITM;
-    sec_param.io_caps        = SEC_PARAM_IO_CAPABILITIES;
-    sec_param.oob            = SEC_PARAM_OOB;
-    sec_param.min_key_size   = SEC_PARAM_MIN_KEY_SIZE;
-    sec_param.max_key_size   = SEC_PARAM_MAX_KEY_SIZE;
-    sec_param.kdist_own.enc  = 1;
-    sec_param.kdist_own.id   = 1;
-    sec_param.kdist_peer.enc = 1;
-    sec_param.kdist_peer.id  = 1;
+    sec_param.bond           = 1;  // bonding
+    sec_param.io_caps        = BLE_GAP_IO_CAPS_NONE; // no io capabilities (-> 'Just Works' Auth)
+    sec_param.lesc           = 1;  // LE Secure Connections -> DH-Key exchange
+    sec_param.oob            = 0;  // don't have oob data (which would be great for mitm protection)
+    sec_param.min_key_size   = 7;  // don't care about min key size -> use min value (7 Bytes)
+    sec_param.max_key_size   = 16; // don't care either-> use maximum value (16 Bytes)
+    sec_param.mitm           = 0;  // no man-in-the-middle protection possible (would need anything but 'Just Works')
+    sec_param.kdist_own.enc  = sec_param.bond;  // keys to be stored persistently (if bond = 1)
+    sec_param.kdist_own.id   = sec_param.bond;
+    sec_param.kdist_peer.enc = sec_param.bond;
+    sec_param.kdist_peer.id  = sec_param.bond;
 
     err_code = pm_sec_params_set(&sec_param);
     APP_ERROR_CHECK(err_code);
@@ -942,6 +1015,15 @@ static void peer_manager_init(bool erase_bonds)
     APP_ERROR_CHECK(err_code);
 
     err_code = fds_register(fds_evt_handler);
+    APP_ERROR_CHECK(err_code);
+
+     nrf_crypto_init();
+
+    err_code = nrf_crypto_public_key_compute(NRF_CRYPTO_CURVE_SECP256R1, &m_crypto_key_sk, &m_crypto_key_pk);
+    APP_ERROR_CHECK(err_code);
+
+    /* Set the public key */
+    err_code = pm_lesc_public_key_set(&m_lesc_pk);
     APP_ERROR_CHECK(err_code);
 }
 
