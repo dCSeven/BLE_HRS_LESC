@@ -996,7 +996,7 @@ static void peer_manager_init(bool erase_bonds)
     memset(&sec_param, 0, sizeof(ble_gap_sec_params_t));
 
     // Security parameters to be used for all security procedures.
-    sec_param.bond           = 1;  // bonding
+    sec_param.bond           = 0;  // bonding
     sec_param.io_caps        = BLE_GAP_IO_CAPS_NONE; // no io capabilities (-> 'Just Works' Auth)
     sec_param.lesc           = 1;  // LE Secure Connections -> DH-Key exchange
     sec_param.oob            = 0;  // don't have oob data (which would be great for mitm protection)
