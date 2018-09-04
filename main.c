@@ -45,6 +45,7 @@
  * (and also Battery and Device Information services). This application uses the
  * @ref srvlib_conn_params module.
  */
+#define DEBUG
 
 #include <stdint.h>
 
@@ -255,19 +256,23 @@ static void pm_evt_handler(pm_evt_t const * p_evt)
                          p_evt->conn_handle,
                          p_evt->params.conn_sec_succeeded.procedure);
         } break;
+        //bsp_indication_set(BSP_INDICATE_BONDING);
 
         case PM_EVT_CONN_SEC_FAILED:
         {
+            NRF_LOG_WARNING("Conn security failed.\r\n");
             /* Often, when securing fails, it shouldn't be restarted, for security reasons.
              * Other times, it can be restarted directly.
              * Sometimes it can be restarted, but only after changing some Security Parameters.
              * Sometimes, it cannot be restarted until the link is disconnected and reconnected.
              * Sometimes it is impossible, to secure the link, or the peer device does not support it.
              * How to handle this error is highly application dependent. */
+      //    bsp_indication_set(BSP_LED_INDICATE_USER_LED3);
         } break;
 
         case PM_EVT_CONN_SEC_CONFIG_REQ:
         {
+            NRF_LOG_DEBUG("PM_EVT_CONN_SEC_CONFIG_REQ\r\n");
             // Reject pairing request from an already bonded peer.
             pm_conn_sec_config_t conn_sec_config = {.allow_repairing = true};
             pm_conn_sec_config_reply(p_evt->conn_handle, &conn_sec_config);
@@ -275,6 +280,7 @@ static void pm_evt_handler(pm_evt_t const * p_evt)
 
         case PM_EVT_STORAGE_FULL:
         {
+            NRF_LOG_DEBUG("PM_EVT_STORAGE_FULL\r\n");
             // Run garbage collection on the flash.
             err_code = fds_gc();
             if (err_code == FDS_ERR_BUSY || err_code == FDS_ERR_NO_SPACE_IN_QUEUES)
@@ -289,45 +295,57 @@ static void pm_evt_handler(pm_evt_t const * p_evt)
 
         case PM_EVT_PEERS_DELETE_SUCCEEDED:
         {
+            NRF_LOG_DEBUG("PM_EVT_PEEERS_DELETE_SUCCEDED\r\n");
             advertising_start();
         } break;
 
         case PM_EVT_LOCAL_DB_CACHE_APPLY_FAILED:
         {
+            NRF_LOG_DEBUG("PM_EVT_LOCAL_DB_CACHE_APPLY_FAILED\r\n");
             // The local database has likely changed, send service changed indications.
             pm_local_database_has_changed();
         } break;
 
         case PM_EVT_PEER_DATA_UPDATE_FAILED:
         {
+            NRF_LOG_DEBUG("PM_EVT_PEER_DATA_UPDATE_FAILED\r\n");
             // Assert.
             APP_ERROR_CHECK(p_evt->params.peer_data_update_failed.error);
         } break;
 
         case PM_EVT_PEER_DELETE_FAILED:
         {
+            NRF_LOG_DEBUG("PM_EVT_PEER_DELETE_FAILED\r\n");
             // Assert.
             APP_ERROR_CHECK(p_evt->params.peer_delete_failed.error);
         } break;
 
         case PM_EVT_PEERS_DELETE_FAILED:
         {
+            NRF_LOG_DEBUG("PM_EVT_PEERS_DELETE_FAILED\r\n");
             // Assert.
             APP_ERROR_CHECK(p_evt->params.peers_delete_failed_evt.error);
         } break;
 
         case PM_EVT_ERROR_UNEXPECTED:
         {
+            NRF_LOG_DEBUG("PM_EVT_ERROR_UNEXPECTED\r\n");
             // Assert.
             APP_ERROR_CHECK(p_evt->params.error_unexpected.error);
         } break;
 
         case PM_EVT_CONN_SEC_START:
+            NRF_LOG_DEBUG("PM_EVT_CONN_SEC_START\r\n"); break;
         case PM_EVT_PEER_DATA_UPDATE_SUCCEEDED:
+            NRF_LOG_DEBUG("PM_EVT_PEER_DATA_UPDATE_SUCCEDED\r\n"); break;
         case PM_EVT_PEER_DELETE_SUCCEEDED:
+            NRF_LOG_DEBUG("PM_EVT_PEER_DELETE_SUCCEDED\r\n"); break;
         case PM_EVT_LOCAL_DB_CACHE_APPLIED:
+            NRF_LOG_DEBUG("PM_EVT_LOCAL_DB_CACHE_APPLIED\r\n"); break;
         case PM_EVT_SERVICE_CHANGED_IND_SENT:
+            NRF_LOG_DEBUG("PM_EVT_SERVICE_CHANGED_IND_SENT\r\n"); break;
         case PM_EVT_SERVICE_CHANGED_IND_CONFIRMED:
+            NRF_LOG_DEBUG("PM_EVT_SERVICE_CHANGED_IND_CONFIRMED\r\n"); break;
         default:
             break;
     }
@@ -506,7 +524,7 @@ static void gap_params_init(void)
     ble_gap_conn_params_t   gap_conn_params;
     ble_gap_conn_sec_mode_t sec_mode;
 
-    BLE_GAP_CONN_SEC_MODE_SET_OPEN(&sec_mode);
+    BLE_GAP_CONN_SEC_MODE_SET_NO_ACCESS(&sec_mode); // write deviceName
 
     err_code = sd_ble_gap_device_name_set(&sec_mode,
                                           (const uint8_t *)DEVICE_NAME,
@@ -768,7 +786,8 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
                 break;
             default: // error case (don't split for now)
                 //TODO set LED2
-                sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_AUTHENTICATION_FAILURE );
+                err_code = sd_ble_gap_disconnect(m_conn_handle, BLE_HCI_AUTHENTICATION_FAILURE );
+                APP_ERROR_CHECK(err_code);
             }
 
           break; // BLE_GAP_EVT_CONNECTED
@@ -796,6 +815,7 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
             break; // BLE_GATTS_EVT_TIMEOUT
 
         case BLE_EVT_USER_MEM_REQUEST:
+            NRF_LOG_DEBUG("BLE_EVT_USER_MEM_REQUEST\r\n");
             if(ble_conn_state_encrypted(m_conn_handle))
             {
                 err_code = sd_ble_user_mem_reply(m_conn_handle, NULL);
@@ -820,6 +840,7 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
 
         case BLE_GATTS_EVT_RW_AUTHORIZE_REQUEST:
         {
+            NRF_LOG_INFO("BLE_GATTS_EVT_RW_AUTHORIZE_REQUEST\r\n");
             ble_gatts_evt_rw_authorize_request_t  req;
             ble_gatts_rw_authorize_reply_params_t auth_reply;
 
@@ -1141,4 +1162,22 @@ int main(void)
     }
 }
 
+#include "app_error.h"
 
+void app_error_fault_handler(uint32_t id, uint32_t pc, uint32_t info)
+{
+    error_info_t *info_s = (error_info_t *) info;
+    if(info_s != NULL)
+    {
+         NRF_LOG_ERROR("Fatal: id %d, pc:%p, %s:%d code:0x%x", id, pc,(uint32_t) info_s->p_file_name, info_s->line_num, info_s->err_code);
+    }else NRF_LOG_ERROR("Fatal\r\n");
+
+    NRF_LOG_FINAL_FLUSH();
+    // On assert, the system can only recover with a reset.
+#ifndef DEBUG
+    NVIC_SystemReset();
+#else
+    app_error_save_and_stop(id, pc, info);
+#endif // DEBUG
+
+}
