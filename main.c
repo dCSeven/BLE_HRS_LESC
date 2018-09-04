@@ -760,7 +760,7 @@ static void on_ble_evt(ble_evt_t * p_ble_evt)
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
 
             static ret_code_t ret_val = NRF_SUCCESS;
-            ret_val = pm_conn_secure (m_conn_handle, 0);
+//          ret_val = pm_conn_secure (m_conn_handle, 0); // active peripheral -> central connection encryption request (results in Bonding Dialog on phone)
 
             switch (ret_val)
             {
